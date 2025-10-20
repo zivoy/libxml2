@@ -8,31 +8,12 @@ pub fn build(b: *std.Build) void {
     const build_tools = b.option(bool, "tools", "Build xmllint and xmlcatalog tools") orelse true;
     const dynamic = b.option(bool, "dynamic", "Build dynamic library") orelse false;
 
-    // Feature options - only for explicitly disabling features
-    const html = b.option(bool, "html", "Enable HTML parsing") orelse true;
-    const c14n = b.option(bool, "c14n", "Enable C14N support") orelse true;
-    const catalog = b.option(bool, "catalog", "Enable catalog support") orelse true;
-    const debug = b.option(bool, "debug", "Enable debugging support") orelse true;
+    // Feature options - only for features that conditionally compile code
     const ftp = b.option(bool, "ftp", "Enable FTP support") orelse false;
     const http = b.option(bool, "http", "Enable HTTP support") orelse false;
-    const iso8859x = b.option(bool, "iso8859x", "Enable ISO8859X support") orelse true;
     const legacy = b.option(bool, "legacy", "Enable deprecated APIs") orelse false;
+    const sax1 = b.option(bool, "sax1", "Enable SAX1 API (requires legacy)") orelse false;
     const modules = b.option(bool, "modules", "Enable dynamic module loading") orelse true;
-    const output = b.option(bool, "output", "Enable serialization support") orelse true;
-    const pattern = b.option(bool, "pattern", "Enable pattern support") orelse true;
-    const push = b.option(bool, "push", "Enable push parser") orelse true;
-    const reader = b.option(bool, "reader", "Enable xmlReader API") orelse true;
-    const regexps = b.option(bool, "regexps", "Enable regular expressions") orelse true;
-    const relaxng = b.option(bool, "relaxng", "Enable Relax-NG support") orelse true;
-    const sax1 = b.option(bool, "sax1", "Enable SAX1 API") orelse true;
-    const schemas = b.option(bool, "schemas", "Enable XML Schemas support") orelse true;
-    const schematron = b.option(bool, "schematron", "Enable Schematron support") orelse true;
-    const tree = b.option(bool, "tree", "Enable tree manipulation APIs") orelse true;
-    const valid = b.option(bool, "valid", "Enable DTD validation") orelse true;
-    const writer = b.option(bool, "writer", "Enable xmlWriter API") orelse true;
-    const xinclude = b.option(bool, "xinclude", "Enable XInclude support") orelse true;
-    const xpath = b.option(bool, "xpath", "Enable XPath support") orelse true;
-    const xptr = b.option(bool, "xptr", "Enable XPointer support") orelse true;
 
     // Optional compression/encoding libraries
     const zlib = b.option(bool, "zlib", "Enable zlib compression") orelse true;
@@ -48,6 +29,9 @@ pub fn build(b: *std.Build) void {
     // Auto-detect features based on platform
     const threads = isPosix;
     const iconv = isPosix;
+
+    const libhistory = b.option(bool, "history", "Enable libhistory") orelse isPosix;
+    const libreadline = b.option(bool, "readline", "Enable libreadline") orelse isPosix;
 
     // Determine sysconfdir based on prefix
     const sysconfdir = b.option([]const u8, "sysconfdir", "System configuration directory") orelse blk: {
@@ -71,12 +55,57 @@ pub fn build(b: *std.Build) void {
         .HAVE_DECL_MMAP = @intFromBool(isPosix),
         .HAVE_FUNC_ATTRIBUTE_DESTRUCTOR = @intFromBool(isPosix),
         .HAVE_DLOPEN = @intFromBool(modules and isPosix),
-        .HAVE_LIBHISTORY = @intFromBool(isPosix),
-        .HAVE_LIBREADLINE = @intFromBool(isPosix),
+        .HAVE_LIBHISTORY = @intFromBool(libhistory),
+        .HAVE_LIBREADLINE = @intFromBool(libreadline),
         .HAVE_SHLLOAD = @intFromBool(!isPosix),
         .HAVE_STDINT_H = 1,
         .XML_SYSCONFDIR = sysconfdir,
         .XML_THREAD_LOCAL = if (isPosix) "_Thread_local" else "__declspec(thread)",
+    });
+
+    // Create xmlversion.h from template
+    const module_extension = if (isPosix) ".so" else ".dll";
+
+    const xmlversion_h = b.addConfigHeader(.{
+        .style = .{ .cmake = libxml2_upstream.path("include/libxml/xmlversion.h.in") },
+        .include_path = "libxml/xmlversion.h",
+    }, .{
+        .VERSION = "2.16.0",
+        .LIBXML_VERSION_NUMBER = 21600,
+        .LIBXML_VERSION_EXTRA = "",
+        .WITH_THREADS = @intFromBool(threads),
+        .WITH_THREAD_ALLOC = @intFromBool(threads),
+        // .WITH_TREE = 1,
+        .WITH_OUTPUT = 1,
+        .WITH_PUSH = 1,
+        .WITH_READER = 1,
+        .WITH_PATTERN = 1,
+        .WITH_WRITER = 1,
+        .WITH_SAX1 = @intFromBool(sax1 and legacy),
+        // .WITH_FTP = @intFromBool(ftp),
+        .WITH_HTTP = @intFromBool(http),
+        .WITH_VALID = 1,
+        .WITH_HTML = 1,
+        // .WITH_LEGACY = @intFromBool(legacy),
+        .WITH_C14N = 1,
+        .WITH_CATALOG = 1,
+        .WITH_XPATH = 1,
+        .WITH_XPTR = 1,
+        .WITH_XINCLUDE = 1,
+        .WITH_ICONV = @intFromBool(iconv),
+        .WITH_ICU = @intFromBool(icu),
+        .WITH_ISO8859X = 1,
+        .WITH_DEBUG = 1,
+        // .WITH_MEM_DEBUG = 0,
+        // .WITH_RUN_DEBUG = 0,
+        .WITH_REGEXPS = 1,
+        .WITH_RELAXNG = 1,
+        .WITH_SCHEMAS = 1,
+        .WITH_SCHEMATRON = 1,
+        .WITH_MODULES = @intFromBool(modules),
+        .MODULE_EXTENSION = module_extension,
+        .WITH_ZLIB = @intFromBool(zlib),
+        // .WITH_LZMA = @intFromBool(lzma),
     });
 
     // Create library
@@ -97,44 +126,15 @@ pub fn build(b: *std.Build) void {
     lib_mod.addIncludePath(libxml2_upstream.path("include"));
     lib_mod.addIncludePath(libxml2_upstream.path("."));
 
-    // Add config header
+    // Add config headers
     libxml2.addConfigHeader(config_h);
+    libxml2.addConfigHeader(xmlversion_h);
     libxml2.root_module.addCMacro("HAVE_CONFIG_H", "1");
-
-    // Feature macros for libxml2
-    if (c14n) lib_mod.addCMacro("LIBXML_C14N_ENABLED", "1");
-    if (catalog) lib_mod.addCMacro("LIBXML_CATALOG_ENABLED", "1");
-    if (debug) lib_mod.addCMacro("LIBXML_DEBUG_ENABLED", "1");
-    if (ftp) lib_mod.addCMacro("LIBXML_FTP_ENABLED", "1");
-    if (html) lib_mod.addCMacro("LIBXML_HTML_ENABLED", "1");
-    if (http) lib_mod.addCMacro("LIBXML_HTTP_ENABLED", "1");
-    if (iconv) lib_mod.addCMacro("LIBXML_ICONV_ENABLED", "1");
-    if (icu) lib_mod.addCMacro("LIBXML_ICU_ENABLED", "1");
-    if (iso8859x) lib_mod.addCMacro("LIBXML_ISO8859X_ENABLED", "1");
-    if (legacy) lib_mod.addCMacro("LIBXML_LEGACY_ENABLED", "1");
-    if (lzma) lib_mod.addCMacro("LIBXML_LZMA_ENABLED", "1");
-    if (modules) lib_mod.addCMacro("LIBXML_MODULES_ENABLED", "1");
-    if (output) lib_mod.addCMacro("LIBXML_OUTPUT_ENABLED", "1");
-    if (pattern) lib_mod.addCMacro("LIBXML_PATTERN_ENABLED", "1");
-    if (push) lib_mod.addCMacro("LIBXML_PUSH_ENABLED", "1");
-    if (reader) lib_mod.addCMacro("LIBXML_READER_ENABLED", "1");
-    if (regexps) lib_mod.addCMacro("LIBXML_REGEXP_ENABLED", "1");
-    if (relaxng) lib_mod.addCMacro("LIBXML_RELAXNG_ENABLED", "1");
-    if (sax1) lib_mod.addCMacro("LIBXML_SAX1_ENABLED", "1");
-    if (schemas) lib_mod.addCMacro("LIBXML_SCHEMAS_ENABLED", "1");
-    if (schematron) lib_mod.addCMacro("LIBXML_SCHEMATRON_ENABLED", "1");
-    if (threads) lib_mod.addCMacro("LIBXML_THREAD_ENABLED", "1");
-    if (tree) lib_mod.addCMacro("LIBXML_TREE_ENABLED", "1");
-    if (valid) lib_mod.addCMacro("LIBXML_VALID_ENABLED", "1");
-    if (writer) lib_mod.addCMacro("LIBXML_WRITER_ENABLED", "1");
-    if (xinclude) lib_mod.addCMacro("LIBXML_XINCLUDE_ENABLED", "1");
-    if (xpath) lib_mod.addCMacro("LIBXML_XPATH_ENABLED", "1");
-    if (xptr) lib_mod.addCMacro("LIBXML_XPTR_ENABLED", "1");
-    if (zlib) lib_mod.addCMacro("LIBXML_ZLIB_ENABLED", "1");
 
     // Install headers
     libxml2.installHeadersDirectory(libxml2_upstream.path("include"), ".", .{});
     libxml2.installConfigHeader(config_h);
+    libxml2.installConfigHeader(xmlversion_h);
 
     // Add core source files
     libxml2.addCSourceFiles(.{
@@ -143,36 +143,7 @@ pub fn build(b: *std.Build) void {
         .flags = &common_cflags,
     });
 
-    // Conditionally add feature-specific source files
-    if (html) {
-        libxml2.addCSourceFiles(.{
-            .root = libxml2_upstream.path("."),
-            .files = &html_sources,
-            .flags = &common_cflags,
-        });
-    }
-
-    if (c14n) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("c14n.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (catalog) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("catalog.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (debug) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("debugXML.c"),
-            .flags = &common_cflags,
-        });
-    }
-
+    // Conditionally add optional source files
     if (ftp) {
         libxml2.addCSourceFile(.{
             .file = libxml2_upstream.path("nanoftp.c"),
@@ -192,94 +163,17 @@ pub fn build(b: *std.Build) void {
             .file = libxml2_upstream.path("legacy.c"),
             .flags = &common_cflags,
         });
-    }
-
-    if (modules) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("xmlmodule.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (pattern) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("pattern.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (reader) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("xmlreader.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (regexps) {
-        libxml2.addCSourceFiles(.{
-            .root = libxml2_upstream.path("."),
-            .files = &regexp_sources,
-            .flags = &common_cflags,
-        });
-    }
-
-    if (relaxng) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("relaxng.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (schemas) {
-        libxml2.addCSourceFiles(.{
-            .root = libxml2_upstream.path("."),
-            .files = &schema_sources,
-            .flags = &common_cflags,
-        });
-    }
-
-    if (schematron) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("schematron.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (threads) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("threads.c"),
-            .flags = &common_cflags,
-        });
-        if (isPosix) {
-            libxml2.linkSystemLibrary2("pthread", .{});
+        if (sax1) {
+            libxml2.addCSourceFile(.{
+                .file = libxml2_upstream.path("SAX.c"),
+                .flags = &common_cflags,
+            });
         }
     }
 
-    if (writer) {
+    if (lzma) {
         libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("xmlwriter.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (xinclude) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("xinclude.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (xpath) {
-        libxml2.addCSourceFile(.{
-            .file = libxml2_upstream.path("xpath.c"),
-            .flags = &common_cflags,
-        });
-    }
-
-    if (xptr) {
-        libxml2.addCSourceFiles(.{
-            .root = libxml2_upstream.path("."),
-            .files = &xptr_sources,
+            .file = libxml2_upstream.path("xzlib.c"),
             .flags = &common_cflags,
         });
     }
@@ -309,12 +203,24 @@ pub fn build(b: *std.Build) void {
         libxml2.linkSystemLibrary2("icudata", .{});
     }
 
+    if (threads and isPosix) {
+        libxml2.linkSystemLibrary2("pthread", .{});
+    }
+
+    if (isPosix and modules) {
+        libxml2.linkSystemLibrary2("dl", .{});
+    }
+
     if (!isPosix) {
         libxml2.linkSystemLibrary2("ws2_32", .{});
     }
 
-    if (modules and isPosix) {
-        libxml2.linkSystemLibrary2("dl", .{});
+    if (libreadline) {
+        libxml2.linkSystemLibrary2("readline", .{});
+    }
+
+    if (libhistory) {
+        libxml2.linkSystemLibrary2("history", .{});
     }
 
     b.installArtifact(libxml2);
@@ -353,51 +259,46 @@ pub fn build(b: *std.Build) void {
     }
 }
 
-// Core source files that are always included
+// Core source files that are always included (from meson.build)
 const core_sources = [_][]const u8{
     "buf.c",
+    "c14n.c",
+    "catalog.c",
     "chvalid.c",
+    "debugXML.c",
     "dict.c",
     "encoding.c",
     "entities.c",
     "error.c",
     "globals.c",
     "hash.c",
+    "HTMLparser.c",
+    "HTMLtree.c",
     "list.c",
     "parser.c",
     "parserInternals.c",
-    "SAX.c",
+    "pattern.c",
+    "relaxng.c",
     "SAX2.c",
+    "schematron.c",
+    "threads.c",
     "tree.c",
     "uri.c",
     "valid.c",
+    "xinclude.c",
+    "xlink.c",
     "xmlIO.c",
     "xmlmemory.c",
-    "xmlsave.c",
-    "xmlstring.c",
-    "xmlunicode.c",
-};
-
-// HTML-specific sources
-const html_sources = [_][]const u8{
-    "HTMLparser.c",
-    "HTMLtree.c",
-};
-
-// Regular expression sources
-const regexp_sources = [_][]const u8{
+    "xmlmodule.c",
+    "xmlreader.c",
     "xmlregexp.c",
-};
-
-// Schema-specific sources
-const schema_sources = [_][]const u8{
+    "xmlsave.c",
     "xmlschemas.c",
     "xmlschemastypes.c",
-};
-
-// XPointer sources
-const xptr_sources = [_][]const u8{
-    "xlink.c",
+    "xmlstring.c",
+    // "xmlunicode.c",
+    "xmlwriter.c",
+    "xpath.c",
     "xpointer.c",
 };
 
