@@ -26,6 +26,10 @@ You can set these options when importing as a dependency with `b.dependency("lib
 | icu          | false   | Enable ICU support                               |
 | sysconfdir   | Platform-specific | System configuration directory         |
 
+## TODO
+
+- Get option flags to be in parity with upstream, have option to enable python, disable html, etc.
+
 ---
 
 Contributions welcome, open PR
