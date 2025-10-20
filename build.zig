@@ -4,7 +4,13 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const t = target.result;
+    const isPosix = t.os.tag != .windows;
+
     // Build options
+    const libhistory = b.option(bool, "history", "Enable libhistory") orelse isPosix;
+    const libreadline = b.option(bool, "readline", "Enable libreadline") orelse isPosix;
+
     const build_tools = b.option(bool, "tools", "Build xmllint and xmlcatalog tools") orelse true;
     const dynamic = b.option(bool, "dynamic", "Build dynamic library") orelse false;
 
@@ -23,15 +29,9 @@ pub fn build(b: *std.Build) void {
     // Get upstream dependency
     const libxml2_upstream = b.dependency("libxml2_upstream", .{});
 
-    const t = target.result;
-    const isPosix = t.os.tag != .windows;
-
     // Auto-detect features based on platform
     const threads = isPosix;
     const iconv = isPosix;
-
-    const libhistory = b.option(bool, "history", "Enable libhistory") orelse isPosix;
-    const libreadline = b.option(bool, "readline", "Enable libreadline") orelse isPosix;
 
     // Determine sysconfdir based on prefix
     const sysconfdir = b.option([]const u8, "sysconfdir", "System configuration directory") orelse blk: {
@@ -126,10 +126,15 @@ pub fn build(b: *std.Build) void {
     lib_mod.addIncludePath(libxml2_upstream.path("include"));
     lib_mod.addIncludePath(libxml2_upstream.path("."));
 
-    // Add config headers
+    // Add config headers and necessary macros
     libxml2.addConfigHeader(config_h);
     libxml2.addConfigHeader(xmlversion_h);
     libxml2.root_module.addCMacro("HAVE_CONFIG_H", "1");
+    libxml2.root_module.addCMacro("SUPPORT_IP6", "1");
+
+    // if (threads and isPosix) {
+    //     libxml2.root_module.addCFlag("-D_REENTRANT");
+    // }
 
     // Install headers
     libxml2.installHeadersDirectory(libxml2_upstream.path("include"), ".", .{});
@@ -215,18 +220,10 @@ pub fn build(b: *std.Build) void {
         libxml2.linkSystemLibrary2("ws2_32", .{});
     }
 
-    if (libreadline) {
-        libxml2.linkSystemLibrary2("readline", .{});
-    }
-
-    if (libhistory) {
-        libxml2.linkSystemLibrary2("history", .{});
-    }
-
     b.installArtifact(libxml2);
 
     // Build tools
-    if (build_tools) {
+    if (build_tools and libreadline) {
         const xmllint = b.addExecutable(.{
             .name = "xmllint",
             .root_module = b.createModule(.{
@@ -236,10 +233,13 @@ pub fn build(b: *std.Build) void {
             }),
         });
         xmllint.linkLibrary(libxml2);
-        xmllint.addCSourceFile(.{
-            .file = libxml2_upstream.path("xmllint.c"),
+        xmllint.addCSourceFiles(.{
+            .files = &lint_sources,
             .flags = &common_cflags,
+            .root = libxml2_upstream.path("."),
         });
+        xmllint.linkSystemLibrary2("readline", .{});
+        if (libhistory) xmllint.linkSystemLibrary2("history", .{});
         b.installArtifact(xmllint);
 
         const xmlcatalog = b.addExecutable(.{
@@ -255,6 +255,8 @@ pub fn build(b: *std.Build) void {
             .file = libxml2_upstream.path("xmlcatalog.c"),
             .flags = &common_cflags,
         });
+        xmlcatalog.linkSystemLibrary2("readline", .{});
+        if (libhistory) xmlcatalog.linkSystemLibrary2("history", .{});
         b.installArtifact(xmlcatalog);
     }
 }
@@ -300,6 +302,12 @@ const core_sources = [_][]const u8{
     "xmlwriter.c",
     "xpath.c",
     "xpointer.c",
+};
+
+const lint_sources = [_][]const u8{
+    "xmllint.c",
+    "lintmain.c",
+    "shell.c",
 };
 
 // Common C flags
