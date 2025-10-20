@@ -4,6 +4,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const version = std.SemanticVersion{ .major = 2, .minor = 15, .patch = 1, .build = "zig" };
+
     const t = target.result;
     const isPosix = t.os.tag != .windows;
 
@@ -66,13 +68,30 @@ pub fn build(b: *std.Build) void {
     // Create xmlversion.h from template
     const module_extension = if (isPosix) ".so" else ".dll";
 
+    const versionNumber: i64 = @intCast(version.major * 1_00_00 + version.minor * 1_00 + version.patch);
+    const versionString: []const u8 = blk: {
+        // var buf: [1024]u8 = undefined;
+        const buf = b.allocator.alloc(u8, 1024) catch @panic("OOM");
+        // defer b.allocator.free(buf);
+        var writer = std.Io.Writer.fixed(buf);
+        writer.print("{d}.{d}.{d}", .{ version.major, version.minor, version.patch })
+        // version.format(&writer)
+        catch |e| {
+            std.log.err("writing version: {t}", .{e});
+        };
+        writer.flush() catch |e| {
+            std.log.err("flushing version: {t}", .{e});
+        };
+        break :blk writer.buffered();
+    };
+
     const xmlversion_h = b.addConfigHeader(.{
         .style = .{ .cmake = libxml2_upstream.path("include/libxml/xmlversion.h.in") },
         .include_path = "libxml/xmlversion.h",
     }, .{
-        .VERSION = "2.16.0",
-        .LIBXML_VERSION_NUMBER = 21600,
-        .LIBXML_VERSION_EXTRA = "",
+        .VERSION = versionString,
+        .LIBXML_VERSION_NUMBER = versionNumber,
+        .LIBXML_VERSION_EXTRA = version.build,
         .WITH_THREADS = @intFromBool(threads),
         .WITH_THREAD_ALLOC = @intFromBool(threads),
         // .WITH_TREE = 1,

@@ -3,11 +3,11 @@
     .fingerprint = 0xf268267b477d0bec,
     .minimum_zig_version = "0.15.1",
 
-    .version = "2.16.0",
+    .version = "2.15.0",
     .dependencies = .{
         .libxml2_upstream = .{
-            .url = "git+https://gitlab.gnome.org/GNOME/libxml2#22f9d730898d2dfcc03a484e65e1f8fc3675225f",
-            .hash = "N-V-__8AAMjxMQEdF8V_Qiy8bfqMo_V2KN_OONTfAAOFKo03",
+            .url = "git+https://gitlab.gnome.org/GNOME/libxml2#2.15",
+            .hash = "N-V-__8AAGDwMQF2IHBGW-iuy3HD7ZCfVEALdBc3_ZVjfUV3",
         },
         .zlib = .{
             .url = "git+https://github.com/allyourcodebase/zlib#61e7df7e996ec5a5f13a653db3c419adb340d6ef",

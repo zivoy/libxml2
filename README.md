@@ -2,6 +2,8 @@
 
 This is [libxml2](https://gitlab.gnome.org/GNOME/libxml2) packaged using the Zig build system.
 
+This builds libxml2 version `2.15.1`
+
 This project requires Zig version `0.15.1` or higher.
 
 ## Options
