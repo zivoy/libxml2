@@ -23,3 +23,8 @@ You can set these options when importing as a dependency with `b.dependency("lib
 | lzma         | false   | Enable LZMA compression                          |
 | icu          | false   | Enable ICU support                               |
 | sysconfdir   | Platform-specific | System configuration directory         |
+
+---
+
+Contributions welcome, open PR
+
